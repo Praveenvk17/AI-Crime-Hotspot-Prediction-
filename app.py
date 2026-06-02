@@ -7,18 +7,12 @@ import folium
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
-# ==============================
-# PAGE CONFIG
-# ==============================
 st.set_page_config(
     page_title="AI Crime Prediction",
     page_icon="🚔",
     layout="wide"
 )
 
-# ==============================
-# RCB-STYLE PROFESSIONAL UI
-# ==============================
 st.markdown(
     """
     <style>
@@ -26,12 +20,10 @@ st.markdown(
         background: linear-gradient(135deg, #080808 0%, #1a0000 55%, #2b0000 100%);
         color: #f8fafc;
     }
-
     h1, h2, h3 {
         color: #f5c542;
         font-weight: 800;
     }
-
     .stMetric {
         background: linear-gradient(135deg, #111111, #2b0000);
         padding: 18px;
@@ -39,11 +31,9 @@ st.markdown(
         border: 1px solid #f5c542;
         box-shadow: 0 0 12px rgba(245, 197, 66, 0.15);
     }
-
     div[data-testid="stAlert"] {
         border-radius: 12px;
     }
-
     .stButton button {
         background: linear-gradient(90deg, #b91c1c, #f5c542);
         color: white;
@@ -52,38 +42,28 @@ st.markdown(
         padding: 9px 20px;
         font-weight: 700;
     }
-
     .stButton button:hover {
         background: linear-gradient(90deg, #f5c542, #b91c1c);
         color: black;
-    }
-
-    section[data-testid="stSidebar"] {
-        background-color: #080808;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# ==============================
-# LOGIN CONFIG
-# ==============================
-ADMIN_PASSWORD = "crime@admin"
+DEFAULT_ADMIN_PASSWORD = "crime@admin"
 POLICE_PASSWORD = "police@secure"
 
 for key, value in {
     "logged_in": False,
     "role": "",
     "prediction_result": None,
-    "risk_level": None
+    "risk_level": None,
+    "admin_password": DEFAULT_ADMIN_PASSWORD,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
-# ==============================
-# LOGIN PAGE
-# ==============================
 if not st.session_state.logged_in:
     col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -93,56 +73,66 @@ if not st.session_state.logged_in:
             unsafe_allow_html=True
         )
 
-        st.info("Secure Access Portal")
+        st.info("Authorized users only. Please enter your credentials.")
 
-        role = st.selectbox(
-            "Select Role",
-            ["Admin", "Police Officer"]
+        username = st.text_input(
+            "Username",
+            placeholder="system_admin / police_officer"
         )
 
         password = st.text_input(
-            "Enter Password",
+            "Password",
             type="password"
         )
 
         if st.button("Login"):
-            if role == "Admin" and password == ADMIN_PASSWORD:
+            username = username.strip().lower()
+
+            if (
+                username in ["system_admin", "admin"]
+                and password == st.session_state.admin_password
+            ):
                 st.session_state.logged_in = True
                 st.session_state.role = "ADMIN"
                 st.rerun()
 
-            elif role == "Police Officer" and password == POLICE_PASSWORD:
+            elif (
+                username in ["police_officer", "police", "officer"]
+                and password == POLICE_PASSWORD
+            ):
                 st.session_state.logged_in = True
                 st.session_state.role = "POLICE OFFICER"
                 st.rerun()
 
             else:
-                st.error("❌ Invalid Password")
+                st.error("❌ Invalid username or password")
 
     st.stop()
 
-# ==============================
-# LOAD MODEL + DATA
-# ==============================
-model = joblib.load("models/crime_model.pkl")
-state_encoder = joblib.load("models/state_encoder.pkl")
-district_encoder = joblib.load("models/district_encoder.pkl")
+@st.cache_resource
+def load_models():
+    model = joblib.load("models/crime_model.pkl")
+    state_encoder = joblib.load("models/state_encoder.pkl")
+    district_encoder = joblib.load("models/district_encoder.pkl")
+    return model, state_encoder, district_encoder
 
-df = pd.read_csv("crime.csv")
-df.columns = df.columns.str.strip()
+@st.cache_data
+def load_data():
+    data = pd.read_csv("dataset/crime.csv")
+    data.columns = data.columns.str.strip()
+    data = data[
+        ~data["DISTRICT"].str.contains(
+            "TOTAL|ZZ TOTAL",
+            na=False
+        )
+    ]
+    return data
 
-df = df[
-    ~df["DISTRICT"].str.contains(
-        "TOTAL|ZZ TOTAL",
-        na=False
-    )
-]
+model, state_encoder, district_encoder = load_models()
+df = load_data()
 
 is_admin = st.session_state.role == "ADMIN"
 
-# ==============================
-# HEADER
-# ==============================
 col1, col2 = st.columns([8, 1])
 
 with col1:
@@ -162,11 +152,7 @@ st.write(
     "AI-powered crime prediction, hotspot analysis, risk detection and police alert system"
 )
 
-# ==============================
-# ADMIN DASHBOARD + MULTI CSV
-# ==============================
 if is_admin:
-
     st.subheader("📊 Crime Dashboard")
 
     c1, c2, c3 = st.columns(3)
@@ -179,6 +165,40 @@ if is_admin:
 
     with c3:
         st.metric("Districts", df["DISTRICT"].nunique())
+
+    st.divider()
+
+    st.subheader("🔐 Admin Password Change")
+
+    with st.expander("Change Admin Password"):
+        current_password = st.text_input(
+            "Current Password",
+            type="password"
+        )
+
+        new_password = st.text_input(
+            "New Password",
+            type="password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm New Password",
+            type="password"
+        )
+
+        if st.button("Update Password"):
+            if current_password != st.session_state.admin_password:
+                st.error("❌ Current password is incorrect")
+
+            elif new_password == "":
+                st.warning("⚠️ New password cannot be empty")
+
+            elif new_password != confirm_password:
+                st.error("❌ New password and confirm password do not match")
+
+            else:
+                st.session_state.admin_password = new_password
+                st.success("✅ Admin password updated successfully")
 
     st.divider()
 
@@ -204,7 +224,6 @@ if is_admin:
                 required_columns = ["STATE/UT", "DISTRICT", "YEAR"]
 
                 if all(col in temp_df.columns for col in required_columns):
-
                     numeric_cols = (
                         temp_df
                         .select_dtypes(include=["int64", "float64"])
@@ -292,9 +311,6 @@ if is_admin:
 
     st.divider()
 
-# ==============================
-# CRIME PREDICTION
-# ==============================
 st.subheader("🔍 Crime Prediction")
 
 states = sorted(df["STATE/UT"].unique())
@@ -305,9 +321,7 @@ selected_state = st.selectbox(
 )
 
 districts = sorted(
-    df[
-        df["STATE/UT"] == selected_state
-    ]["DISTRICT"].unique()
+    df[df["STATE/UT"] == selected_state]["DISTRICT"].unique()
 )
 
 selected_district = st.selectbox(
@@ -323,7 +337,6 @@ year = st.number_input(
 )
 
 if st.button("Predict Crime"):
-
     state_encoded = state_encoder.transform([selected_state])[0]
     district_encoded = district_encoder.transform([selected_district])[0]
 
@@ -349,11 +362,7 @@ if st.button("Predict Crime"):
     else:
         st.session_state.risk_level = "LOW"
 
-# ==============================
-# RESULT SECTION
-# ==============================
 if st.session_state.prediction_result is not None:
-
     st.subheader("Prediction Result")
 
     st.success(
@@ -408,9 +417,6 @@ if st.session_state.prediction_result is not None:
 • Keep surveillance systems active
         """)
 
-    # ==============================
-    # CRIME CATEGORY
-    # ==============================
     st.subheader("🧠 Crime Category Prediction")
 
     selected_rows = df[
@@ -464,9 +470,6 @@ if st.session_state.prediction_result is not None:
         use_container_width=True
     )
 
-    # ==============================
-    # SMART ALERT
-    # ==============================
     st.subheader("🚨 Smart Crime Alert")
 
     if st.session_state.risk_level == "HIGH":
@@ -510,13 +513,9 @@ Routine monitoring recommended.
             """
         )
 
-    # ==============================
-    # PDF REPORT
-    # ==============================
     st.subheader("📄 Download Crime Report")
 
     if st.button("Generate Police Report PDF"):
-
         file_name = "crime_report.pdf"
 
         doc = SimpleDocTemplate(file_name)
@@ -617,11 +616,7 @@ Routine monitoring recommended.
 
         st.success("✅ PDF Generated Successfully")
 
-# ==============================
-# ADMIN FEATURES
-# ==============================
 if is_admin:
-
     st.divider()
 
     st.subheader("🚨 Top Dangerous Districts")
