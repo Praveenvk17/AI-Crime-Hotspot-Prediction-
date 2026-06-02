@@ -128,7 +128,7 @@ model = joblib.load("models/crime_model.pkl")
 state_encoder = joblib.load("models/state_encoder.pkl")
 district_encoder = joblib.load("models/district_encoder.pkl")
 
-df = pd.read_csv("dataset/crime.csv")
+df = pd.read_csv("crime.csv")
 df.columns = df.columns.str.strip()
 
 df = df[
