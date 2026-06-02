@@ -118,7 +118,7 @@ def load_models():
 
 @st.cache_data
 def load_data():
-    data = pd.read_csv("dataset/crime.csv")
+    data = pd.read_csv("crime.csv")
     data.columns = data.columns.str.strip()
     data = data[
         ~data["DISTRICT"].str.contains(
